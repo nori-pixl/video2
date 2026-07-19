@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>nameBy.nori-pixl 動画アップローダー</title>
+  <script src="https://nori-pixl.github.io/expansiontag/tag.js"></script>
+<style>
+  body { font-family: sans-serif; max-width: 760px; margin: 20px auto; padding: 0 16px; }
+  fieldset { margin-bottom: 24px; }
+  label { display: block; margin: 8px 0 2px; font-size: 0.9rem; }
+  input[type="text"], textarea { width: 100%; }
+  .video-card { border: 1px solid #ccc; padding: 10px; margin-bottom: 12px; cursor: pointer; }
+  .video-card:hover { background: #f5f5f5; }
+  .video-card video { width: 100%; pointer-events: none; } /* カード内は再生ボタン無効、クリックで視聴ページへ */
+  .title { font-weight: bold; }
+  .meta { font-size: 0.8rem; color: #666; }
+  .progress-wrap { display: none; margin-top: 8px; }
+  .error-msg { color: red; display: none; margin-top: 8px; }
+</style>
+
+</head>
+<body>
+  <h1>nameBy.nori-pixl My Videoアップローダー<br>cloudflared版</h1><p>cloudflaredそのままを受け取るので、安定して早いバージョンです。</p>
+<p>v1.4 匿名動画アップローダー</p><br><p>無断転載ダメ絶対！</p><br><script type="text/blink"><p>【速報】エラー404バグが修整されました。 </p></script><hr><br>
+  <fieldset>
+     <a href="setumei.html">ルール(ちゃんと読むといいよ)</a>
+    <legend>アップロード</legend>
+
+    <form id="upload-form" method="POST" enctype="multipart/form-data">
+      <label>投稿者名(任意、空なら「名無し」)</label>
+      <input type="text" name="uploader_name" id="uploader-name-input">
+
+      <label>タイトル</label>
+      <input type="text" name="title" required>
+
+      <label>概要欄</label>
+      <textarea name="description" rows="3"></textarea>
+
+      <label>動画ファイル (mp4 / webm / ogg / mov / m4v)</label>
+      <input type="file" name="video" accept="video/*" required>
+
+      <button type="submit" id="upload-btn">アップロード</button>
+
+      <div class="progress-wrap" id="progress-wrap">
+        <progress id="progress-bar" value="0" max="100" style="width:100%"></progress>
+        <span id="progress-label">0%</span>
+      </div>
+      <div class="error-msg" id="upload-error"></div>
+    </form>
+  </fieldset>
+  <h2>動画一覧</h2>
+  <div id="video-list">読み込み中...</div>
+<hr>
+ <h6>&copy nori-pixl</h6>
+  <script src="/config.js"></script>
+  <script>
+    // 画面(Render)とバックエンド(PC)が別ドメインなので、送信先をBACKEND_URLで明示する
+    const form = document.getElementById('upload-form');
+    form.action = BACKEND_URL + '/upload';
+
+    // 投稿者名はlocalStorageに覚えさせておき、次回は自動で入力される
+    const nameInput = document.getElementById('uploader-name-input');
+    nameInput.value = localStorage.getItem('displayName') || '';
+
+    async function loadVideos() {
+      const listEl = document.getElementById('video-list');
+      try {
+        const res = await fetch(BACKEND_URL + '/videos');
+
+        if (!res.ok) {
+          const text = await res.text().catch(() => '');
+          listEl.innerHTML = `<p>読み込みに失敗しました (status: ${res.status})</p><pre style="white-space:pre-wrap;font-size:0.75rem;color:#900;">${escapeHtml(text.slice(0, 500))}</pre>`;
+          return;
+        }
+
+        const videos = await res.json();
+
+        if (videos.length === 0) {
+          listEl.innerHTML = '<p>まだ動画がありません。</p>';
+          return;
+        }
+
+        listEl.innerHTML = videos.map(v => `
+          <div class="video-card" onclick="location.href='/watch?id=${v.id}'">
+            <video preload="metadata" src="${BACKEND_URL}/stream/${v.id}"></video>
+            <div class="title">${escapeHtml(v.title)}</div>
+            <div class="meta">投稿者: ${escapeHtml(v.uploader_name || '名無し')} / ${escapeHtml(v.uploaded_at)}</div>
+          </div>
+        `).join('');
+      } catch (e) {
+        listEl.innerHTML = '<p>サーバータイムアウトの時間です。サーバーの点検、バグ修整、サーバーの休憩を行っています。 タイムアウト時間 22:00 〜 7:00</p>';
+      }
+    }
+
+    function escapeHtml(str) {
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    loadVideos();
+
+    // アップロード処理(進捗メーター付き、XHRで送信)
+    const uploadBtn = document.getElementById('upload-btn');
+    const progressWrap = document.getElementById('progress-wrap');
+    const progressBar = document.getElementById('progress-bar');
+    const progressLabel = document.getElementById('progress-label');
+    const errorMsg = document.getElementById('upload-error');
+
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      errorMsg.style.display = 'none';
+
+      // 次回のために投稿者名を覚えておく
+      if (nameInput.value.trim()) {
+        localStorage.setItem('displayName', nameInput.value.trim());
+      }
+
+      const formData = new FormData(form);
+      const xhr = new XMLHttpRequest();
+
+      uploadBtn.disabled = true;
+      progressWrap.style.display = 'block';
+      progressBar.value = 0;
+      progressLabel.textContent = '0%';
+
+      xhr.upload.addEventListener('progress', (event) => {
+        if (!event.lengthComputable) return;
+        const percent = Math.round((event.loaded / event.total) * 100);
+        progressBar.value = percent;
+        progressLabel.textContent = percent + '%';
+      });
+
+      xhr.addEventListener('load', () => {
+        uploadBtn.disabled = false;
+        progressWrap.style.display = 'none';
+        if (xhr.status >= 200 && xhr.status < 300) {
+          const savedName = nameInput.value;
+          form.reset();
+          nameInput.value = savedName;
+          loadVideos();
+        } else {
+          location.reload();
+        }
+      });
+
+      xhr.addEventListener('error', () => {
+        uploadBtn.disabled = false;
+        progressWrap.style.display = 'none';
+        errorMsg.textContent = '通信エラーが発生しました。';
+        errorMsg.style.display = 'block';
+      });
+
+      xhr.open('POST', form.action, true);
+      xhr.send(formData);
+    });
+  </script>
+</body>
+</html>

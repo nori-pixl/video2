@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>動画を見る</title>
+<style>
+  body { font-family: sans-serif; max-width: 760px; margin: 20px auto; padding: 0 16px; }
+  video { width: 100%; background: #000; }
+  .meta { font-size: 0.85rem; color: #666; margin-top: 6px; }
+  .description { margin-top: 10px; white-space: pre-wrap; }
+  .comment { border-bottom: 1px solid #ddd; padding: 8px 0; }
+  .comment-user { font-weight: bold; }
+  .comment-meta { font-size: 0.75rem; color: #888; }
+  textarea, input[type="text"] { width: 100%; }
+  .del-link { color: red; font-size: 0.8rem; cursor: pointer; }
+  #comment-name { margin-bottom: 6px; }
+  .error-msg { color: red; display: none; margin-top: 8px; }
+</style>
+</head>
+<body>
+  <p><a href="/">&larr; 一覧に戻る</a></p>
+
+  <div id="video-area">読み込み中...</div>
+
+  <h3>コメント</h3>
+  <div id="comment-form-area">
+    <label style="font-size:0.85rem;">名前(任意、空なら「名無し」)</label>
+    <input type="text" id="comment-name">
+    <label style="font-size:0.85rem;">コメント</label>
+    <textarea id="comment-input" rows="2" placeholder="コメントを入力"></textarea>
+    <button id="comment-submit">コメントする</button>
+    <div class="error-msg" id="comment-error"></div>
+  </div>
+  <div id="comment-list">読み込み中...</div>
+
+  <script src="/config.js"></script>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const videoId = params.get('id');
+
+    // 名前はlocalStorageに覚えさせておく
+    const nameInput = document.getElementById('comment-name');
+    nameInput.value = localStorage.getItem('displayName') || '';
+
+    if (!videoId) {
+      document.getElementById('video-area').innerHTML = '<p>動画IDが指定されていません。</p>';
+    } else {
+      loadVideo();
+      loadComments();
+    }
+
+    async function loadVideo() {
+      const area = document.getElementById('video-area');
+      try {
+        const res = await fetch(`${BACKEND_URL}/videos/${videoId}`);
+        if (!res.ok) {
+          const text = await res.text().catch(() => '');
+          area.innerHTML = `<p>動画情報の取得に失敗しました (status: ${res.status})</p><pre style="white-space:pre-wrap;font-size:0.75rem;color:#900;">${escapeHtml(text.slice(0, 500))}</pre>`;
+          return;
+        }
+        const v = await res.json();
+
+        area.innerHTML = `
+          <video controls autoplay src="${BACKEND_URL}/stream/${v.id}"></video>
+          <h2>タイトル</h2>
+          <div class="title" style="font-size:1.2rem;font-weight:bold;margin-top:8px;">${escapeHtml(v.title)}</div>
+          <div class="meta">投稿者: ${escapeHtml(v.uploader_name || '名無し')} / ${escapeHtml(v.uploaded_at)}</div>
+          <h2>概要</h2>
+          ${v.description ? `<div class="description">${escapeHtml(v.description)}</div>` : ''}
+          
+        `;
+      } catch (e) {
+        area.innerHTML = '<p>通信エラー: ' + escapeHtml(e.message) + '</p>';
+      }
+    }
+
+    async function deleteVideo(id) {
+      if (!confirm('この動画を削除しますか?(誰でも削除できます)')) return;
+      try {
+        const res = await fetch(`${BACKEND_URL}/videos/${id}`, { method: 'DELETE' });
+        if (res.ok) {
+          location.href = '/';
+        } else {
+          alert('削除に失敗しました');
+        }
+      } catch (e) {
+        alert('通信エラー: ' + e.message);
+      }
+    }
+
+    document.getElementById('comment-submit').addEventListener('click', submitComment);
+
+    async function submitComment() {
+      const errorMsg = document.getElementById('comment-error');
+      errorMsg.style.display = 'none';
+
+      const input = document.getElementById('comment-input');
+      const content = input.value.trim();
+      if (!content) return;
+
+      if (nameInput.value.trim()) {
+        localStorage.setItem('displayName', nameInput.value.trim());
+      }
+
+      try {
+        const res = await fetch(`${BACKEND_URL}/videos/${videoId}/comments`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content, username: nameInput.value.trim() }),
+        });
+
+        if (res.ok) {
+          input.value = '';
+          loadComments();
+        } else {
+          const data = await res.json().catch(() => ({}));
+          errorMsg.textContent = data.error || 'コメントの投稿に失敗しました';
+          errorMsg.style.display = 'block';
+        }
+      } catch (e) {
+        errorMsg.textContent = '通信エラー: ' + e.message;
+        errorMsg.style.display = 'block';
+      }
+    }
+
+    async function loadComments() {
+      const listEl = document.getElementById('comment-list');
+      try {
+        const res = await fetch(`${BACKEND_URL}/videos/${videoId}/comments`);
+
+        if (!res.ok) {
+          const text = await res.text().catch(() => '');
+          listEl.innerHTML = `<p>コメントの読み込みに失敗しました (status: ${res.status})</p><pre style="white-space:pre-wrap;font-size:0.75rem;color:#900;">${escapeHtml(text.slice(0, 500))}</pre>`;
+          return;
+        }
+
+        const comments = await res.json();
+
+        if (comments.length === 0) {
+          listEl.innerHTML = '<p>まだコメントがありません。</p>';
+          return;
+        }
+
+        listEl.innerHTML = comments.map(c => `
+          <div class="comment">
+            <div class="comment-user">${escapeHtml(c.username || '名無し')}</div>
+            <div>${escapeHtml(c.content)}</div>
+            <div class="comment-meta">
+              ${escapeHtml(c.created_at)}
+              
+            </div>
+          </div>
+        `).join('');
+      } catch (e) {
+        listEl.innerHTML = '<p>通信エラー: ' + escapeHtml(e.message) + '</p>';
+      }
+    }
+
+    async function deleteComment(id) {
+      if (!confirm('このコメントを削除しますか?')) return;
+      try {
+        const res = await fetch(`${BACKEND_URL}/comments/${id}`, { method: 'DELETE' });
+        if (res.ok) {
+          loadComments();
+        } else {
+          alert('削除に失敗しました');
+        }
+      } catch (e) {
+        alert('通信エラー: ' + e.message);
+      }
+    }
+
+    function escapeHtml(str) {
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+  </script>
+</body>
+</html>
