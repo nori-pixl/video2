@@ -50,7 +50,7 @@
     </form>
   </fieldset>
   <h2>動画一覧</h2>
-  <div id="video-list">読み込み中...</div>
+  <div id="video-list"><p>サーバーから応答を待っています。30Second </p> <progress></progress></div>
 <hr>
  <h6>&copy nori-pixl</h6>
   <script src="/config.js"></script>
@@ -89,7 +89,7 @@
           </div>
         `).join('');
       } catch (e) {
-        listEl.innerHTML = '<p>サーバーから応答を待っています。30Second </p> <progress></progress>';
+        listEl.innerHTML = 'サーバータイムアウトの時間です';
       }
     }
 
