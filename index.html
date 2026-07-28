@@ -221,7 +221,7 @@
  
         listEl.innerHTML = comments.map(c => `
           <div class="comment"><br>
-            <div class="comment-user">${escapeHtml(c.username || '名無し')}</div><br>
+            <div class="comment-user">${escapeHtml(c.username || '名無し')}</div>
             <div>${escapeHtml(c.content)}</div>
             <div class="comment-meta">${escapeHtml(c.created_at)}</div>
           </div>
