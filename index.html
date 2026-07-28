@@ -22,7 +22,7 @@
 </head>
 <body>
   <h1>nameBy.nori-pixl My Videoアップローダー<br>render版</h1><p>cloudflaredからrenderで受け取るので、不安定な場合もあり、待ち時間が発生し、遅延があるバージョンです。</p>
-<p>v1.6 匿名動画アップローダー</p><br><p>無断転載ダメ絶対！</p><br><script type="text/blink"><p>【速報】エラー404バグが修整されました。 </p></script><hr><br>
+<p>v1.8 匿名動画アップローダー</p><br><p>無断転載ダメ絶対！</p><br><script type="text/blink"><p>【速報】エラー404バグが修整されました。 </p></script><hr><br>
   <fieldset>
      <a href="setumei.html">ルール(ちゃんと読むといいよ)</a>
     <legend>アップロード</legend>
@@ -49,6 +49,17 @@
       <div class="error-msg" id="upload-error"></div>
     </form>
   </fieldset>
+  <h2>コミュニティコメント</h2>
+  <p style="font-size:0.85rem;color:#666;">動画に関係なく、誰でも匿名で書き込める掲示板です。</p>
+  <div id="community-comment-form-area">
+    <label style="font-size:0.85rem;">名前(任意、空なら「名無し」)</label>
+    <input type="text" id="community-comment-name">
+    <label style="font-size:0.85rem;">コメント</label>
+    <textarea id="community-comment-input" rows="2" placeholder="コメントを入力"></textarea>
+    <button id="community-comment-submit">コメントする</button>
+    <div class="error-msg" id="community-comment-error"></div>
+  </div>
+  <div id="community-comment-list">読み込み中...</div><hr>
   <h2>動画一覧</h2>
   <div style="margin-bottom:10px;">
     <h4>検索 (ベータ)</h4>
