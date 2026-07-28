@@ -22,7 +22,7 @@
 </head>
 <body>
   <h1>nameBy.nori-pixl My Videoアップローダー<br>render版</h1><p>cloudflaredからrenderで受け取るので、不安定な場合もあり、待ち時間が発生し、遅延があるバージョンです。</p>
-<p>v1.4 匿名動画アップローダー</p><br><p>無断転載ダメ絶対！</p><br><script type="text/blink"><p>【速報】エラー404バグが修整されました。 </p></script><hr><br>
+<p>v1.6 匿名動画アップローダー</p><br><p>無断転載ダメ絶対！</p><br><script type="text/blink"><p>【速報】エラー404バグが修整されました。 </p></script><hr><br>
   <fieldset>
      <a href="setumei.html">ルール(ちゃんと読むといいよ)</a>
     <legend>アップロード</legend>
@@ -50,6 +50,10 @@
     </form>
   </fieldset>
   <h2>動画一覧</h2>
+  <div style="margin-bottom:10px;">
+    <h4>検索 (ベータ)</h4>
+    <input type="text" id="search-input" placeholder="タイトルで検索" style="width:100%; box-sizing:border-box;">
+  </div>
   <div id="video-list"><p>サーバーから応答を待っています。30Second </p> <progress></progress></div>
 <hr>
  <h6>&copy nori-pixl</h6>
@@ -58,80 +62,106 @@
     // 画面(Render)とバックエンド(PC)が別ドメインなので、送信先をBACKEND_URLで明示する
     const form = document.getElementById('upload-form');
     form.action = BACKEND_URL + '/upload';
-
+ 
     // 投稿者名はlocalStorageに覚えさせておき、次回は自動で入力される
     const nameInput = document.getElementById('uploader-name-input');
     nameInput.value = localStorage.getItem('displayName') || '';
-
+ 
+    let allVideos = [];
+ 
+    function renderVideos(videos) {
+      const listEl = document.getElementById('video-list');
+ 
+      if (videos.length === 0) {
+        listEl.innerHTML = '<p>該当する動画がありません。</p>';
+        return;
+      }
+ 
+      listEl.innerHTML = videos.map(v => `
+        <div class="video-card" onclick="location.href='/watch?id=${v.id}'">
+          <video preload="metadata" src="${BACKEND_URL}/stream/${v.id}"></video>
+          <div class="title">${escapeHtml(v.title)}</div>
+          <div class="meta">投稿者: ${escapeHtml(v.uploader_name || '名無し')} / ${escapeHtml(v.uploaded_at)}</div>
+        </div>
+      `).join('');
+    }
+ 
     async function loadVideos() {
       const listEl = document.getElementById('video-list');
       try {
         const res = await fetch(BACKEND_URL + '/videos');
-
+ 
         if (!res.ok) {
           const text = await res.text().catch(() => '');
           listEl.innerHTML = `<p>読み込みに失敗しました (status: ${res.status})</p><pre style="white-space:pre-wrap;font-size:0.75rem;color:#900;">${escapeHtml(text.slice(0, 500))}</pre>`;
           return;
         }
-
-        const videos = await res.json();
-
-        if (videos.length === 0) {
+ 
+        allVideos = await res.json();
+ 
+        if (allVideos.length === 0) {
           listEl.innerHTML = '<p>まだ動画がありません。</p>';
           return;
         }
-
-        listEl.innerHTML = videos.map(v => `
-          <div class="video-card" onclick="location.href='/watch?id=${v.id}'">
-            <video preload="metadata" src="${BACKEND_URL}/stream/${v.id}"></video>
-            <div class="title">${escapeHtml(v.title)}</div>
-            <div class="meta">投稿者: ${escapeHtml(v.uploader_name || '名無し')} / ${escapeHtml(v.uploaded_at)}</div>
-          </div>
-        `).join('');
+ 
+        applySearch();
       } catch (e) {
-        listEl.innerHTML = 'サーバータイムアウトの時間です';
+        listEl.innerHTML = '<p>サーバータイムアウトの時間です。サーバーの点検、バグ修整、サーバーの休憩を行っています。 タイムアウト時間 22:00 〜 7:00</p>';
       }
     }
-
+ 
+    function applySearch() {
+      const keyword = searchInput.value.trim().toLowerCase();
+      if (!keyword) {
+        renderVideos(allVideos);
+        return;
+      }
+      const filtered = allVideos.filter(v => (v.title || '').toLowerCase().includes(keyword));
+      renderVideos(filtered);
+    }
+ 
+    const searchInput = document.getElementById('search-input');
+    searchInput.addEventListener('input', applySearch);
+ 
     function escapeHtml(str) {
       const div = document.createElement('div');
       div.textContent = str;
       return div.innerHTML;
     }
-
+ 
     loadVideos();
-
+ 
     // アップロード処理(進捗メーター付き、XHRで送信)
     const uploadBtn = document.getElementById('upload-btn');
     const progressWrap = document.getElementById('progress-wrap');
     const progressBar = document.getElementById('progress-bar');
     const progressLabel = document.getElementById('progress-label');
     const errorMsg = document.getElementById('upload-error');
-
+ 
     form.addEventListener('submit', (e) => {
       e.preventDefault();
       errorMsg.style.display = 'none';
-
+ 
       // 次回のために投稿者名を覚えておく
       if (nameInput.value.trim()) {
         localStorage.setItem('displayName', nameInput.value.trim());
       }
-
+ 
       const formData = new FormData(form);
       const xhr = new XMLHttpRequest();
-
+ 
       uploadBtn.disabled = true;
       progressWrap.style.display = 'block';
       progressBar.value = 0;
       progressLabel.textContent = '0%';
-
+ 
       xhr.upload.addEventListener('progress', (event) => {
         if (!event.lengthComputable) return;
         const percent = Math.round((event.loaded / event.total) * 100);
         progressBar.value = percent;
         progressLabel.textContent = percent + '%';
       });
-
+ 
       xhr.addEventListener('load', () => {
         uploadBtn.disabled = false;
         progressWrap.style.display = 'none';
@@ -144,17 +174,17 @@
           location.reload();
         }
       });
-
+ 
       xhr.addEventListener('error', () => {
         uploadBtn.disabled = false;
         progressWrap.style.display = 'none';
         errorMsg.textContent = '通信エラーが発生しました。';
         errorMsg.style.display = 'block';
       });
-
+ 
       xhr.open('POST', form.action, true);
       xhr.send(formData);
     });
   </script>
 </body>
-</html>
+  </html>
