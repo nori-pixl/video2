@@ -70,7 +70,7 @@
  <h6>&copy nori-pixl</h6>
   <script src="/config.js"></script>
   <script>
-    // 画面(Render)とバックエンド(PC)が別ドメインなので、送信先をBACKEND_URLで明示する
+   // 画面(Render)とバックエンド(PC)が別ドメインなので、送信先をBACKEND_URLで明示する
     const form = document.getElementById('upload-form');
     form.action = BACKEND_URL + '/upload';
  
@@ -196,6 +196,76 @@
       xhr.open('POST', form.action, true);
       xhr.send(formData);
     });
-  </script>
+ 
+    // ---- コミュニティコメント(動画に紐付かない匿名掲示板) ----
+    const communityNameInput = document.getElementById('community-comment-name');
+    communityNameInput.value = localStorage.getItem('displayName') || '';
+ 
+    async function loadCommunityComments() {
+      const listEl = document.getElementById('community-comment-list');
+      try {
+        const res = await fetch(BACKEND_URL + '/community/comments');
+ 
+        if (!res.ok) {
+          const text = await res.text().catch(() => '');
+          listEl.innerHTML = `<p>コメントの読み込みに失敗しました (status: ${res.status})</p><pre style="white-space:pre-wrap;font-size:0.75rem;color:#900;">${escapeHtml(text.slice(0, 500))}</pre>`;
+          return;
+        }
+ 
+        const comments = await res.json();
+ 
+        if (comments.length === 0) {
+          listEl.innerHTML = '<p>まだコメントがありません。</p>';
+          return;
+        }
+ 
+        listEl.innerHTML = comments.map(c => `
+          <div class="comment">
+            <div class="comment-user">${escapeHtml(c.username || '名無し')}</div>
+            <div>${escapeHtml(c.content)}</div>
+            <div class="comment-meta">${escapeHtml(c.created_at)}</div>
+          </div>
+        `).join('');
+      } catch (e) {
+        listEl.innerHTML = '<p>通信エラー: ' + escapeHtml(e.message) + '</p>';
+      }
+    }
+ 
+    document.getElementById('community-comment-submit').addEventListener('click', submitCommunityComment);
+ 
+    async function submitCommunityComment() {
+      const errorMsg = document.getElementById('community-comment-error');
+      errorMsg.style.display = 'none';
+ 
+      const input = document.getElementById('community-comment-input');
+      const content = input.value.trim();
+      if (!content) return;
+ 
+      if (communityNameInput.value.trim()) {
+        localStorage.setItem('displayName', communityNameInput.value.trim());
+      }
+ 
+      try {
+        const res = await fetch(BACKEND_URL + '/community/comments', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content, username: communityNameInput.value.trim() }),
+        });
+ 
+        if (res.ok) {
+          input.value = '';
+          loadCommunityComments();
+        } else {
+          const data = await res.json().catch(() => ({}));
+          errorMsg.textContent = data.error || 'コメントの投稿に失敗しました';
+          errorMsg.style.display = 'block';
+        }
+      } catch (e) {
+        errorMsg.textContent = '通信エラー: ' + e.message;
+        errorMsg.style.display = 'block';
+      }
+    }
+ 
+    loadCommunityComments();  </script>
 </body>
   </html>
