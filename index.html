@@ -39,12 +39,13 @@
 
       <label>動画ファイル (mp4 / webm / ogg / mov / m4v)</label>
 <input type="file" name="video" accept="video/*" required>
-     <div class="g-recaptcha" 
+    <div class="g-recaptcha" 
      data-sitekey="6LdwonEtAAAAAC9AG8BDBU_F9pJq8IFsIdLc8Puh" 
-     data-callback="document.getElementById('fike').innerHTML = `<button type='submit' id='upload-btn'>アップロード</button>`;">
+     data-callback="showUploadButton">
 </div>
 
-        <span id="fike"></span>
+<!-- ボタンが挿入される要素 -->
+<div id="fike"></div>
 
       <div class="progress-wrap" id="progress-wrap">
         <progress id="progress-bar" value="0" max="100" style="width:100%"></progress>
@@ -81,7 +82,13 @@
     // 投稿者名はlocalStorageに覚えさせておき、次回は自動で入力される
     const nameInput = document.getElementById('uploader-name-input');
     nameInput.value = localStorage.getItem('displayName') || '';
- 
+ function showUploadButton() {
+    // 挿入したいHTMLをテンプレートリテラルで定義
+    const buttonHtml = `<button type="submit" id="upload-btn">アップロード</button>`;
+    
+    // 指定した要素にボタンを挿入
+    document.getElementById('fike').innerHTML = buttonHtml;
+ }
     let allVideos = [];
  
     function renderVideos(videos) {
