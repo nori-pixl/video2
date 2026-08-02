@@ -18,7 +18,7 @@
   .progress-wrap { display: none; margin-top: 8px; }
   .error-msg { color: red; display: none; margin-top: 8px; }
 </style>
-
+<script src="https://www.google.com/recaptcha/api.js" async defer></script>
 </head>
 <body>
   <h1>nameBy.nori-pixl My Videoアップローダー<br>render版</h1><p>cloudflaredからrenderで受け取るので、不安定な場合もあり、待ち時間が発生し、遅延があるバージョンです。</p>
@@ -38,9 +38,11 @@
       <textarea name="description" rows="3"></textarea>
 
       <label>動画ファイル (mp4 / webm / ogg / mov / m4v)</label>
-      <input type="file" name="video" accept="video/*" required>
+      <div class="g-recaptcha" data-sitekey="6LdwonEtAAAAAC9AG8BDBU_F9pJq8IFsIdLc8Puh" data-callback="dodocument.getElementById('fike').innerHTML = '<button type='submit' id='upload-btn'>アップロード</button>"></div>
 
-      <button type="submit" id="upload-btn">アップロード</button>
+      <input type='file' name='video' accept='video/*' required>
+
+        <span id="fike"></span>
 
       <div class="progress-wrap" id="progress-wrap">
         <progress id="progress-bar" value="0" max="100" style="width:100%"></progress>
