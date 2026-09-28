@@ -35,13 +35,33 @@ function cwBuildCommentTree(flatComments) {
   return roots;
 }
 
-function cwReactionButtonsHtml(commentId, reactions) {
-  return REACTIONS.map(
-    (r) => `
-    <button class="cw-reaction-btn" data-id="${commentId}" data-type="${r.type}">
+// 「自分が既にこのリアクションを押したか」はブラウザのlocalStorageで覚えておく
+// (ログイン無し・匿名なので、サーバー側では誰が押したか判定できないため)
+function cwReactionKey(scope, targetId, type) {
+  return `reacted:${scope}:${targetId}:${type}`;
+}
+
+function cwHasReacted(scope, targetId, type) {
+  return localStorage.getItem(cwReactionKey(scope, targetId, type)) === "1";
+}
+
+function cwSetReacted(scope, targetId, type, reacted) {
+  const key = cwReactionKey(scope, targetId, type);
+  if (reacted) {
+    localStorage.setItem(key, "1");
+  } else {
+    localStorage.removeItem(key);
+  }
+}
+
+function cwReactionButtonsHtml(scope, targetId, reactions) {
+  return REACTIONS.map((r) => {
+    const active = cwHasReacted(scope, targetId, r.type);
+    return `
+    <button class="cw-reaction-btn${active ? " cw-active" : ""}" data-scope="${scope}" data-id="${targetId}" data-type="${r.type}">
       ${r.emoji} <span class="cw-reaction-count">${(reactions && reactions[r.type]) || 0}</span>
-    </button>`
-  ).join("");
+    </button>`;
+  }).join("");
 }
 
 function cwCommentNodeHtml(comment, depth) {
@@ -52,7 +72,7 @@ function cwCommentNodeHtml(comment, depth) {
       <div class="cw-comment-user">${cwEscapeHtml(comment.username || "名無し")}</div>
       <div class="cw-comment-body">${cwEscapeHtml(comment.content)}</div>
       <div class="cw-comment-meta">${cwEscapeHtml(comment.created_at)}</div>
-      <div class="cw-reaction-row">${cwReactionButtonsHtml(comment.id, comment.reactions)}</div>
+      <div class="cw-reaction-row">${cwReactionButtonsHtml("comment", comment.id, comment.reactions)}</div>
       <button class="cw-reply-toggle" data-id="${comment.id}">返信</button>
       <div class="cw-reply-form" id="cw-reply-form-${comment.id}" style="display:none;">
         <input type="text" class="cw-reply-name" placeholder="名前(任意、空なら「名無し」)">
@@ -141,18 +161,24 @@ function cwAttachEvents(containerEl, options) {
 
   containerEl.querySelectorAll(".cw-reaction-btn").forEach((btn) => {
     btn.addEventListener("click", async () => {
+      const scope = btn.dataset.scope;
       const id = btn.dataset.id;
       const type = btn.dataset.type;
+      const alreadyReacted = cwHasReacted(scope, id, type);
+      const delta = alreadyReacted ? -1 : 1;
+
       btn.disabled = true;
       try {
         const res = await fetch(options.reactUrlBuilder(id), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ type }),
+          body: JSON.stringify({ type, delta }),
         });
         if (res.ok) {
           const data = await res.json();
           btn.querySelector(".cw-reaction-count").textContent = data.reactions[type];
+          cwSetReacted(scope, id, type, !alreadyReacted);
+          btn.classList.toggle("cw-active", !alreadyReacted);
         }
       } catch (e) {
         // 連打で失敗しても静かに無視
@@ -212,26 +238,26 @@ function cwSetupTopLevelForm({ nameInputId, contentInputId, submitBtnId, errorId
  *   cwRenderVideoReactions(document.getElementById('video-reactions'), videoId, video.reactions, BACKEND_URL + '/videos/' + videoId + '/react');
  */
 function cwRenderVideoReactions(containerEl, videoId, initialReactions, reactUrl) {
-  containerEl.innerHTML = REACTIONS.map(
-    (r) => `
-    <button class="cw-reaction-btn" data-type="${r.type}">
-      ${r.emoji} <span class="cw-reaction-count">${(initialReactions && initialReactions[r.type]) || 0}</span>
-    </button>`
-  ).join("");
+  containerEl.innerHTML = cwReactionButtonsHtml("video", videoId, initialReactions);
 
   containerEl.querySelectorAll(".cw-reaction-btn").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const type = btn.dataset.type;
+      const alreadyReacted = cwHasReacted("video", videoId, type);
+      const delta = alreadyReacted ? -1 : 1;
+
       btn.disabled = true;
       try {
         const res = await fetch(reactUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ type }),
+          body: JSON.stringify({ type, delta }),
         });
         if (res.ok) {
           const data = await res.json();
           btn.querySelector(".cw-reaction-count").textContent = data.reactions[type];
+          cwSetReacted("video", videoId, type, !alreadyReacted);
+          btn.classList.toggle("cw-active", !alreadyReacted);
         }
       } catch (e) {
         // 無視
@@ -240,4 +266,4 @@ function cwRenderVideoReactions(containerEl, videoId, initialReactions, reactUrl
       }
     });
   });
-                                           }
+                              }
