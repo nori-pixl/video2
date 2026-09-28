@@ -3,178 +3,126 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>動画を見る</title>
+<title>nameBy.nori-pixl 動画アップローダー</title>
+  <script src="https://nori-pixl.github.io/expansiontag/tag.js"></script>
 <style>
   body { font-family: sans-serif; max-width: 760px; margin: 20px auto; padding: 0 16px; }
+  label { display: block; margin: 8px 0 2px; font-size: 0.9rem; }
+  input[type="text"], textarea { width: 100%; box-sizing: border-box; }
   video { width: 100%; background: #000; }
-  .meta { font-size: 0.85rem; color: #666; margin-top: 6px; }
-  .description { margin-top: 10px; white-space: pre-wrap; }
-  .comment { border-bottom: 1px solid #ddd; padding: 8px 0; }
-  .comment-user { font-weight: bold; }
-  .comment-meta { font-size: 0.75rem; color: #888; }
-  textarea, input[type="text"] { width: 100%; }
-  .del-link { color: red; font-size: 0.8rem; cursor: pointer; }
-  #comment-name { margin-bottom: 6px; }
   .error-msg { color: red; display: none; margin-top: 8px; }
+  .video-title { font-size: 1.4rem; font-weight: bold; margin: 12px 0 4px; }
+  .video-meta { font-size: 0.85rem; color: #666; margin-bottom: 8px; }
+  .video-description { white-space: pre-wrap; margin-bottom: 8px; }
+
+  /* 動画本体のリアクション、コメントのリアクションで共有するボタンの見た目 */
+  .cw-reaction-btn {
+    font-size: 0.9rem; margin-right: 4px; padding: 3px 10px;
+    border: 1px solid #ccc; border-radius: 14px; background: #fff; cursor: pointer;
+  }
+  .cw-reaction-btn:hover { background: #f0f0f0; }
+  #video-reactions { margin: 8px 0 16px; }
+
+  /* comments-widget.js が生成するコメントツリー用の見た目 */
+  .cw-comment { border-bottom: 1px solid #eee; padding: 8px 0; }
+  .cw-comment-user { font-weight: bold; }
+  .cw-comment-meta { font-size: 0.75rem; color: #666; }
+  .cw-reaction-row { margin-top: 4px; }
+  .cw-reply-toggle {
+    font-size: 0.8rem; margin-top: 4px; background: none; border: none; color: #06c; cursor: pointer; padding: 0;
+  }
+  .cw-reply-form { margin: 6px 0 6px 12px; padding: 6px; border-left: 2px solid #ddd; }
+  .cw-replies { margin-top: 4px; }
 </style>
 </head>
 <body>
-  <p><a href="/">&larr; 一覧に戻る</a></p>
+  <a href="index.html">&larr; 一覧に戻る</a>
 
-  <div id="video-area">読み込み中...</div>
+  <div id="video-area"><p>読み込み中...</p></div>
+  <div id="video-reactions"></div>
 
-  <h3>コメント</h3>
-  <div id="comment-form-area">
+  <h2>コメント</h2>
+  <div id="video-comment-form-area">
     <label style="font-size:0.85rem;">名前(任意、空なら「名無し」)</label>
-    <input type="text" id="comment-name">
+    <input type="text" id="video-comment-name">
     <label style="font-size:0.85rem;">コメント</label>
-    <textarea id="comment-input" rows="2" placeholder="コメントを入力"></textarea>
-    <button id="comment-submit">コメントする</button>
-    <div class="error-msg" id="comment-error"></div>
+    <textarea id="video-comment-input" rows="2" placeholder="コメントを入力"></textarea>
+    <button id="video-comment-submit">コメントする</button>
+    <div class="error-msg" id="video-comment-error"></div>
   </div>
-  <div id="comment-list">読み込み中...</div>
+  <div id="video-comment-list">読み込み中...</div>
 
+  <h6>&copy nori-pixl</h6>
   <script src="/config.js"></script>
+  <script src="/comments-widget.js"></script>
   <script>
-    const params = new URLSearchParams(location.search);
-    const videoId = params.get('id');
+    function escapeHtml(str) {
+      const div = document.createElement("div");
+      div.textContent = str == null ? "" : String(str);
+      return div.innerHTML;
+    }
 
-    // 名前はlocalStorageに覚えさせておく
-    const nameInput = document.getElementById('comment-name');
-    nameInput.value = localStorage.getItem('displayName') || '';
+    const params = new URLSearchParams(location.search);
+    const videoId = params.get("id");
+    const videoAreaEl = document.getElementById("video-area");
 
     if (!videoId) {
-      document.getElementById('video-area').innerHTML = '<p>動画IDが指定されていません。</p>';
+      videoAreaEl.innerHTML = "<p>動画IDが指定されていません。</p>";
     } else {
       loadVideo();
-      loadComments();
     }
 
     async function loadVideo() {
-      const area = document.getElementById('video-area');
       try {
-        const res = await fetch(`${BACKEND_URL}/videos/${videoId}`);
+        const res = await fetch(BACKEND_URL + "/videos/" + videoId);
         if (!res.ok) {
-          const text = await res.text().catch(() => '');
-          area.innerHTML = `<p>動画情報の取得に失敗しました (status: ${res.status})</p><pre style="white-space:pre-wrap;font-size:0.75rem;color:#900;">${escapeHtml(text.slice(0, 500))}</pre>`;
+          const text = await res.text().catch(() => "");
+          videoAreaEl.innerHTML = `<p>読み込みに失敗しました (status: ${res.status})</p><pre style="white-space:pre-wrap;font-size:0.75rem;color:#900;">${escapeHtml(text.slice(0, 500))}</pre>`;
           return;
         }
-        const v = await res.json();
+        const video = await res.json();
 
-        area.innerHTML = `
-          <video controls autoplay src="${BACKEND_URL}/stream/${v.id}"></video>
-          <h2>タイトル</h2>
-          <div class="title" style="font-size:1.2rem;font-weight:bold;margin-top:8px;">${escapeHtml(v.title)}</div>
-          <div class="meta">投稿者: ${escapeHtml(v.uploader_name || '名無し')} / ${escapeHtml(v.uploaded_at)}</div>
-          <h2>概要</h2>
-          ${v.description ? `<div class="description">${escapeHtml(v.description)}</div>` : ''}
-          
+        videoAreaEl.innerHTML = `
+          <video controls preload="metadata" src="${BACKEND_URL}/stream/${video.id}"></video>
+          <div class="video-title">${escapeHtml(video.title)}</div>
+          <div class="video-meta">投稿者: ${escapeHtml(video.uploader_name || "名無し")} / ${escapeHtml(video.uploaded_at)}</div>
+          <div class="video-description">${escapeHtml(video.description || "")}</div>
         `;
+
+        // 動画そのものへのリアクション(グッド/バッド/考えてる顔/不思議な顔/驚いた顔)
+        cwRenderVideoReactions(
+          document.getElementById("video-reactions"),
+          video.id,
+          video.reactions,
+          BACKEND_URL + "/videos/" + video.id + "/react"
+        );
+
+        setupVideoComments(video.id);
       } catch (e) {
-        area.innerHTML = '<p>通信エラー: ' + escapeHtml(e.message) + '</p>';
+        videoAreaEl.innerHTML = "<p>通信エラー: " + escapeHtml(e.message) + "</p>";
       }
     }
 
-    async function deleteVideo(id) {
-      if (!confirm('この動画を削除しますか?(誰でも削除できます)')) return;
-      try {
-        const res = await fetch(`${BACKEND_URL}/videos/${id}`, { method: 'DELETE' });
-        if (res.ok) {
-          location.href = '/';
-        } else {
-          alert('削除に失敗しました');
-        }
-      } catch (e) {
-        alert('通信エラー: ' + e.message);
-      }
-    }
+    function setupVideoComments(videoId) {
+      const listEl = document.getElementById("video-comment-list");
+      const fetchOptions = {
+        fetchUrl: BACKEND_URL + "/videos/" + videoId + "/comments",
+        postUrl: BACKEND_URL + "/videos/" + videoId + "/comments",
+        reactUrlBuilder: (commentId) =>
+          BACKEND_URL + "/videos/" + videoId + "/comments/" + commentId + "/react",
+      };
 
-    document.getElementById('comment-submit').addEventListener('click', submitComment);
+      cwSetupTopLevelForm({
+        nameInputId: "video-comment-name",
+        contentInputId: "video-comment-input",
+        submitBtnId: "video-comment-submit",
+        errorId: "video-comment-error",
+        postUrl: fetchOptions.postUrl,
+        containerEl: listEl,
+        fetchOptions,
+      });
 
-    async function submitComment() {
-      const errorMsg = document.getElementById('comment-error');
-      errorMsg.style.display = 'none';
-
-      const input = document.getElementById('comment-input');
-      const content = input.value.trim();
-      if (!content) return;
-
-      if (nameInput.value.trim()) {
-        localStorage.setItem('displayName', nameInput.value.trim());
-      }
-
-      try {
-        const res = await fetch(`${BACKEND_URL}/videos/${videoId}/comments`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ content, username: nameInput.value.trim() }),
-        });
-
-        if (res.ok) {
-          input.value = '';
-          loadComments();
-        } else {
-          const data = await res.json().catch(() => ({}));
-          errorMsg.textContent = data.error || 'コメントの投稿に失敗しました';
-          errorMsg.style.display = 'block';
-        }
-      } catch (e) {
-        errorMsg.textContent = '通信エラー: ' + e.message;
-        errorMsg.style.display = 'block';
-      }
-    }
-
-    async function loadComments() {
-      const listEl = document.getElementById('comment-list');
-      try {
-        const res = await fetch(`${BACKEND_URL}/videos/${videoId}/comments`);
-
-        if (!res.ok) {
-          const text = await res.text().catch(() => '');
-          listEl.innerHTML = `<p>コメントの読み込みに失敗しました (status: ${res.status})</p><pre style="white-space:pre-wrap;font-size:0.75rem;color:#900;">${escapeHtml(text.slice(0, 500))}</pre>`;
-          return;
-        }
-
-        const comments = await res.json();
-
-        if (comments.length === 0) {
-          listEl.innerHTML = '<p>まだコメントがありません。</p>';
-          return;
-        }
-
-        listEl.innerHTML = comments.map(c => `
-          <div class="comment">
-            <div class="comment-user">${escapeHtml(c.username || '名無し')}</div>
-            <div>${escapeHtml(c.content)}</div>
-            <div class="comment-meta">
-              ${escapeHtml(c.created_at)}
-              
-            </div>
-          </div>
-        `).join('');
-      } catch (e) {
-        listEl.innerHTML = '<p>通信エラー: ' + escapeHtml(e.message) + '</p>';
-      }
-    }
-
-    async function deleteComment(id) {
-      if (!confirm('このコメントを削除しますか?')) return;
-      try {
-        const res = await fetch(`${BACKEND_URL}/comments/${id}`, { method: 'DELETE' });
-        if (res.ok) {
-          loadComments();
-        } else {
-          alert('削除に失敗しました');
-        }
-      } catch (e) {
-        alert('通信エラー: ' + e.message);
-      }
-    }
-
-    function escapeHtml(str) {
-      const div = document.createElement('div');
-      div.textContent = str;
-      return div.innerHTML;
+      cwLoadComments(listEl, fetchOptions);
     }
   </script>
 </body>
